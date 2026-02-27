@@ -16,7 +16,7 @@ services:
         value: "production"
 
   # The PostgreSQL Database
-  - type: pgo
+  - type: postgres
     name: pickbetter-db
     databaseName: pickbetter
     user: pickbetter_admin
