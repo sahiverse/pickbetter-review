@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PickBetter</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --cream: #FFFDE1;
+            --butter: #FBE580;
+            --leaf: #93BD57;
+            --berry: #980404;
+            --charcoal: #1E293B;
+        }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--cream);
+            color: var(--charcoal);
+            overscroll-behavior-y: contain;
+        }
+        .bento-card {
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(251, 229, 128, 0.4);
+            box-shadow: 0 8px 32px rgba(30, 41, 59, 0.05);
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .electric-green { color: var(--leaf); }
+        .bg-leaf { background-color: var(--leaf); }
+        .bg-butter { background-color: var(--butter); }
+        .bg-cream { background-color: var(--cream); }
+        .bg-berry { background-color: var(--berry); }
+        .text-leaf { color: var(--leaf); }
+        .text-berry { color: var(--berry); }
+        .border-leaf { border-color: var(--leaf); }
+        .shadow-glow { box-shadow: 0 12px 30px rgba(147, 189, 87, 0.4); }
+        .shadow-3d { box-shadow: 0 10px 0 #7ea34a; }
+        .shadow-3d-press { box-shadow: 0 2px 0 #7ea34a; transform: translateY(8px); }
+        
+        /* Hide scrollbars but keep functionality */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        input::placeholder { color: #94a3b8; }
+
+        @keyframes wave {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        .liquid-wave {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 200%;
+            height: 200%;
+            background: var(--leaf);
+            border-radius: 40%;
+            animation: wave 10s infinite linear;
+            opacity: 0.6;
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "framer-motion": "https://esm.sh/framer-motion@^12.29.2",
+    "@google/genai": "https://esm.sh/@google/genai@^1.39.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="selection:bg-[#93BD57] selection:text-white">
+    <div id="root"></div>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

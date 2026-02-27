@@ -1,0 +1,7 @@
+{
+  "name": "PickBetter - AI Food Scanner",
+  "description": "A vibrant, gamified food health scanner that evaluates food items based on your personal health profile using Gemini AI.  I am building \"PickBetter,\" an AI-powered nutrition analysis app. The backend is FastAPI. I need a comprehensive User Profile Setup & Edit section. This profile will eventually feed into an FSSAI-based scoring engine, so the data structure must be precise.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

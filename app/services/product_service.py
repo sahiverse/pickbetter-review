@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
-from sqlalchemy import select, update, delete, and_, or_
+from sqlalchemy import select, update, delete, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -17,6 +17,8 @@ from app.models.product import (
     NormalizedNutritionBase
 )
 from app.services.openfoodfacts import OpenFoodFactsClient
+from app.services.scoring_service import calculate_inr_score
+from app.services.personalization_engine import get_personalized_analysis
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -46,7 +48,7 @@ class ProductService:
         # Check cache first if not forcing refresh
         if not force_refresh:
             product = await self._get_from_database(barcode)
-            if product and self._is_fresh(product.last_updated):
+            if product and self._is_fresh(product.updated_at):
                 logger.debug(f"Returning cached product with barcode {barcode}")
                 return await self._to_response(product)
         
@@ -57,11 +59,23 @@ class ProductService:
             
             if not product_data:
                 logger.info(f"Product with barcode {barcode} not found in Open Food Facts")
+                # Check if we have it in database anyway (might be user-contributed)
+                product = await self._get_from_database(barcode)
+                if product:
+                    return await self._to_response(product)
                 return None
-                
-            # Parse and save the product
-            product = await self._create_or_update_product(product_data)
-            return await self._to_response(product)
+            
+            try:
+                # Parse and save the product
+                product = await self._create_or_update_product(product_data)
+                return await self._to_response(product)
+            except (ValueError, AttributeError) as e:
+                logger.error(f"Failed to parse product {barcode}: {e}")
+                # Check if we have it in database anyway
+                product = await self._get_from_database(barcode)
+                if product:
+                    return await self._to_response(product)
+                return None
     
     async def search_products(
         self,
@@ -112,13 +126,13 @@ class ProductService:
         products = result.scalars().all()
         
         # Get total count for pagination
-        count_stmt = select(Product)
+        count_stmt = select(func.count()).select_from(Product)
         if conditions:
             count_stmt = count_stmt.where(and_(*conditions))
-        total = (await self.db.execute(select([func.count()]).select_from(count_stmt.subquery()))).scalar()
+        total = (await self.db.execute(count_stmt)).scalar()
         
         return {
-            "items": [await self._to_response(p) for p in products],
+            "products": [await self._to_response(p) for p in products],
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -142,19 +156,49 @@ class ProductService:
         """
         logger.info(f"Seeding up to {limit} products from category: {category}")
         
+        # Initialize counters
+        added = 0
+        updated = 0
+        skipped = 0
+        errors = 0
+        
+        # First, fetch all products from Open Food Facts
         async with OpenFoodFactsClient() as client:
-            products, total = await client.search_products(category, page_size=min(limit, 1000))
+            # Try with different search terms if the first attempt fails
+            search_terms = [category, f"{category} drinks", f"{category} beverages"]
+            products = []
             
-            added = 0
-            updated = 0
-            skipped = 0
-            errors = 0
+            for search_term in search_terms:
+                logger.info(f"Searching for products with term: {search_term}")
+                products, total = await client.search_products(search_term, page_size=min(limit, 1000))
+                if products:
+                    logger.info(f"Found {len(products)} products with search term: {search_term}")
+                    break
             
-            for product_data in products:
-                try:
+            if not products:
+                logger.warning(f"No products found for category: {category} with any search terms")
+                return {
+                    "total_processed": 0,
+                    "added": 0,
+                    "updated": 0,
+                    "skipped": 0,
+                    "errors": 0
+                }
+        
+        # Process each product in its own transaction
+        for product_data in products:
+            try:
+                # Start a new transaction for each product
+                async with self.db.begin():
+                    # Log the product being processed
+                    logger.debug(f"Processing product: {product_data.get('product_name')} ({product_data.get('code')})")
+                    
                     # Skip if missing required fields
                     if not product_data.get("code") or not product_data.get("product_name"):
+                        logger.warning(f"Skipping product due to missing required fields: {product_data}")
                         skipped += 1
+                        # Rollback and continue
+                        await self.db.rollback()
                         continue
                     
                     # Check if product already exists
@@ -163,29 +207,45 @@ class ProductService:
                     # Parse the product data
                     product = await self._parse_product_data(product_data)
                     
+                    if not product:
+                        logger.warning(f"Failed to parse product data: {product_data.get('code')}")
+                        skipped += 1
+                        # Rollback and continue
+                        await self.db.rollback()
+                        continue
+                    
                     if existing:
                         # Update existing product
                         await self._update_product(existing, product)
                         updated += 1
+                        logger.info(f"Updated existing product: {product.name} ({product.barcode})")
                     else:
                         # Add new product
                         await self._add_product(product)
                         added += 1
-                        
-                except Exception as e:
-                    logger.error(f"Error processing product {product_data.get('code')}: {e}", exc_info=True)
-                    errors += 1
-            
-            # Commit the transaction
-            await self.db.commit()
-            
-            return {
-                "total_processed": len(products),
-                "added": added,
-                "updated": updated,
-                "skipped": skipped,
-                "errors": errors
-            }
+                        logger.info(f"Added new product: {product.name} ({product.barcode})")
+                    
+                    # Commit this product's transaction
+                    await self.db.commit()
+                    
+            except Exception as e:
+                # Rollback on error
+                await self.db.rollback()
+                logger.error(f"Error processing product {product_data.get('code')}: {e}", exc_info=True)
+                errors += 1
+                # Continue with the next product
+                continue
+        
+        result = {
+            "total_processed": added + updated + skipped + errors,
+            "added": added,
+            "updated": updated,
+            "skipped": skipped,
+            "errors": errors
+        }
+        
+        logger.info(f"Seeding completed. Results: {result}")
+        return result
     
     async def _get_from_database(self, barcode: str) -> Optional[Product]:
         """Get a product from the database by barcode."""
@@ -211,6 +271,10 @@ class ProductService:
         # Parse the product data
         product = await self._parse_product_data(product_data)
         
+        # Check if product parsing failed
+        if not product:
+            raise ValueError("Failed to parse product data")
+        
         # Check if product exists
         existing = await self._get_from_database(product.barcode)
         
@@ -226,18 +290,25 @@ class ProductService:
     
     async def _add_product(self, product: ProductCreate) -> Product:
         """Add a new product to the database."""
-        # Create the product
-        db_product = Product(**product.dict(exclude={"normalized_nutrition"}))
+        # Create the product without normalized_nutrition first
+        product_data = product.dict(exclude={"normalized_nutrition"})
+        db_product = Product(**product_data)
         
-        # Add normalized nutrition if available
-        if product.normalized_nutrition:
-            db_nutrition = NormalizedNutrition(
-                **product.normalized_nutrition.dict(),
-                product=db_product
-            )
-            db_product.normalized_nutrition = db_nutrition
-        
+        # Add the product to the session first to generate an ID
         self.db.add(db_product)
+        await self.db.flush()  # This will generate an ID for the product
+        
+        # Now add normalized nutrition if available
+        if product.normalized_nutrition:
+            # Create the nutrition object with the product_id
+            nutrition_data = product.normalized_nutrition.dict(exclude_unset=True)
+            nutrition_data["product_id"] = db_product.id
+            
+            db_nutrition = NormalizedNutrition(**nutrition_data)
+            db_product.normalized_nutrition = db_nutrition
+            self.db.add(db_nutrition)
+        
+        # Commit the transaction
         await self.db.commit()
         await self.db.refresh(db_product)
         
@@ -259,15 +330,17 @@ class ProductService:
         if new_data.normalized_nutrition:
             if existing.normalized_nutrition:
                 # Update existing nutrition
-                for field, value in new_data.normalized_nutrition.dict(exclude_unset=True).items():
+                nutrition_data = new_data.normalized_nutrition.dict(exclude_unset=True)
+                for field, value in nutrition_data.items():
                     setattr(existing.normalized_nutrition, field, value)
             else:
-                # Create new nutrition
-                existing.normalized_nutrition = NormalizedNutrition(
-                    **new_data.normalized_nutrition.dict(),
-                    product_id=existing.id
-                )
+                # Create new nutrition with the product_id
+                nutrition_data = new_data.normalized_nutrition.dict(exclude_unset=True)
+                nutrition_data["product_id"] = existing.id
+                existing.normalized_nutrition = NormalizedNutrition(**nutrition_data)
+                self.db.add(existing.normalized_nutrition)
         
+        # Commit the transaction
         await self.db.commit()
         await self.db.refresh(existing)
         
@@ -279,18 +352,42 @@ class ProductService:
         if not product:
             return None
             
-        data = product.dict()
+        # Convert SQLModel to dict manually
+        data = {
+            "id": product.id,
+            "barcode": product.barcode,
+            "name": product.name,
+            "brand": product.brand,
+            "category": product.category,
+            "image_url": product.image_url,
+            "ingredients_text": product.ingredients_text,
+            "ingredients_list": product.ingredients_list,
+            "nutriments": product.nutriments,
+            "nutrition_grades": product.nutrition_grades,
+            "nova_group": product.nova_group,
+            "ecoscore_grade": product.ecoscore_grade,
+            "last_modified": product.last_modified,
+            "health_score": product.health_score,
+            "health_grade": product.health_grade,
+            "score_last_calculated": product.score_last_calculated,
+            "created_at": product.created_at,
+            "updated_at": product.updated_at
+        }
         
-        # Add normalized nutrition if it exists
-        if hasattr(product, 'normalized_nutrition') and product.normalized_nutrition:
-            data['normalized_nutrition'] = NormalizedNutritionBase.from_orm(product.normalized_nutrition)
+        # Skip normalized nutrition for mock data (not needed for recommendations)
+        data['normalized_nutrition'] = None
         
         return ProductResponse(**data)
     
-    def _is_fresh(self, last_updated: datetime) -> bool:
+    def _is_fresh(self, updated_at: datetime) -> bool:
         """Check if a product's data is fresh (less than 30 days old)."""
-        if not last_updated:
+        if not updated_at:
             return False
             
         cache_days = settings.PRODUCT_CACHE_DAYS
-        return (datetime.utcnow() - last_updated) < timedelta(days=cache_days)
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+        # Make updated_at timezone-aware if it isn't already
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+        return (now - updated_at) < timedelta(days=cache_days)

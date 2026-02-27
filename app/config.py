@@ -1,8 +1,8 @@
-"""Application configuration settings."""
 from functools import lru_cache
 from typing import Optional
+import os
 
-from pydantic import PostgresDsn, validator
+from pydantic import validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,25 +22,36 @@ class Settings(BaseSettings):
     # Open Food Facts
     OPENFOODFACTS_API_URL: str = "https://world.openfoodfacts.org/api/v2"
     
+    # DeepSeek AI
+    DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
+    
+    # Gemini AI
+    GEMINI_API_KEY: str
+    
     # Caching
     PRODUCT_CACHE_DAYS: int = 30
     
-    # Database
-    DATABASE_URL: Optional[PostgresDsn] = None
+    # Database - PostgreSQL only
+    DATABASE_URL: str
+    
+    # Firebase Authentication
+    FIREBASE_CREDENTIALS_PATH: str = "credentials/firebase-credentials.json"
+    GUEST_TOKEN_SECRET: str = "change-this-secret-key-in-production"
     
     @validator("DATABASE_URL", pre=True)
-    def assemble_db_connection(cls, v: Optional[str], values: dict) -> str:
-        """Assemble the database connection string if not provided."""
-        if isinstance(v, str):
-            return v
+    def validate_postgresql_url(cls, v: str, values: dict) -> str:
+        """Validate that DATABASE_URL is PostgreSQL."""
+        if not v:
+            # Default to Supabase PostgreSQL
+            supabase_url = values.get('SUPABASE_URL', '').replace('https://', '')
+            service_key = values.get('SUPABASE_SERVICE_KEY', '')
+            return f"postgresql://postgres:{service_key}@{supabase_url}/postgres"
         
-        return PostgresDsn.build(
-            scheme="postgresql",
-            username="postgres",
-            password=values.get("SUPABASE_SERVICE_KEY"),
-            host=values["SUPABASE_URL"].replace("https://", ""),
-            path=f"/postgres",
-        )
+        # Ensure it's PostgreSQL
+        if not v.startswith("postgresql://") and not v.startswith("postgres://"):
+            raise ValueError("DATABASE_URL must be a PostgreSQL connection string (postgresql://...)")
+        
+        return v
     
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 

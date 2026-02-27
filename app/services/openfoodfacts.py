@@ -12,16 +12,15 @@ from app.models.product import ProductCreate, NormalizedNutritionBase
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# In app/services/openfoodfacts.py
 class OpenFoodFactsClient:
-    """Client for interacting with the Open Food Facts API."""
-    
     def __init__(self, base_url: str = None):
         """Initialize the Open Food Facts client.
         
         Args:
-            base_url: Base URL for the Open Food Facts API
+            base_url: Base URL for the Open Food Facts API (defaults to world.openfoodfacts.org)
         """
-        self.base_url = base_url or settings.OPENFOODFACTS_API_URL
+        self.base_url = base_url or "https://world.openfoodfacts.org"
         self.client = httpx.AsyncClient(
             base_url=self.base_url,
             timeout=30.0,
@@ -48,8 +47,14 @@ class OpenFoodFactsClient:
             Dict containing product data or None if not found
         """
         try:
-            response = await self.client.get(f"/product/{barcode}.json")
+            response = await self.client.get(f"/api/v2/product/{barcode}.json")
             response.raise_for_status()
+            
+            # Check if response is empty or invalid
+            if not response.content or response.content.strip() == b'':
+                logger.error(f"Empty response for barcode {barcode}")
+                return None
+                
             data = response.json()
             
             if data.get("status") == 0:  # Product not found
@@ -89,25 +94,31 @@ class OpenFoodFactsClient:
             # Ensure page_size is within allowed limits
             page_size = min(max(1, page_size), 1000)
             
+            # Simplified search parameters that work based on our test
+            search_params = {
+                "search_terms": category,
+                "json": 1,
+                "page": page,
+                "page_size": page_size,
+                "fields": "code,product_name,brands,categories,image_url,quantity,serving_size,nutriments,ingredients_text,ingredients_analysis_tags,allergens,labels_tags,ecoscore_grade,nova_group,nutriscore_grade,nutriscore_score,nutrient_levels"
+            }
+            
+            logger.info(f"Searching with params: {search_params}")
             response = await self.client.get(
                 "/cgi/search.pl",
-                params={
-                    "tagtype_0": "categories",
-                    "tag_contains_0": "contains",
-                    "tag_0": category,
-                    "json": 1,
-                    "page": page,
-                    "page_size": page_size,
-                    "fields": "code,product_name,brands,categories,image_url,quantity,serving_size,nutriments,ingredients_text,ingredients_analysis_tags,allergens,labels_tags,ecoscore_grade,nova_group,nutriscore_grade,nutriscore_score,nutrient_levels"
-                }
+                params=search_params
             )
             response.raise_for_status()
             
             data = response.json()
-            return data.get("products", []), data.get("count", 0)
+            products = data.get("products", [])
+            count = data.get("count", len(products))
+            
+            logger.info(f"Found {len(products)} products (total: {count})")
+            return products, count
             
         except Exception as e:
-            logger.error(f"Error searching products in category {category}: {e}")
+            logger.error(f"Error searching products in category {category}: {e}", exc_info=True)
             return [], 0
     
     def parse_product(self, product_data: Dict[str, Any]) -> Optional[ProductCreate]:
@@ -130,21 +141,28 @@ class OpenFoodFactsClient:
             # Extract nutrition data
             nutriments = product_data.get("nutriments", {})
             
-            # Create normalized nutrition data
-            normalized_nutrition = NormalizedNutritionBase(
-                calories_100g=nutriments.get("energy-kcal_100g") or nutriments.get("energy_100g"),
-                carbs_100g=nutriments.get("carbohydrates_100g"),
-                sugar_100g=nutriments.get("sugars_100g"),
-                fiber_100g=nutriments.get("fiber_100g"),
-                protein_100g=nutriments.get("proteins_100g"),
-                fat_100g=nutriments.get("fat_100g"),
-                saturated_fat_100g=nutriments.get("saturated-fat_100g"),
-                trans_fat_100g=nutriments.get("trans-fat_100g"),
-                sodium_100g=nutriments.get("sodium_100g"),
-                salt_100g=nutriments.get("salt_100g"),
-                general_health_score=product_data.get("nutriscore_score"),
-                nutri_grade=product_data.get("nutriscore_grade", "").upper()
-            )
+            # Create normalized nutrition data - don't include product_id here
+            # It will be set when the product is created
+            normalized_nutrition = None
+            if any(key in nutriments for key in ["energy-kcal_100g", "energy_100g", "carbohydrates_100g", "sugars_100g"]):
+                normalized_nutrition = NormalizedNutritionBase(
+                    calories_100g=nutriments.get("energy-kcal_100g") or nutriments.get("energy_100g"),
+                    carbohydrates_100g=nutriments.get("carbohydrates_100g"),
+                    sugars_100g=nutriments.get("sugars_100g"),
+                    fiber_100g=nutriments.get("fiber_100g"),
+                    protein_100g=nutriments.get("proteins_100g"),
+                    fat_100g=nutriments.get("fat_100g"),
+                    saturated_fat_100g=nutriments.get("saturated-fat_100g"),
+                    trans_fat_100g=nutriments.get("trans-fat_100g"),
+                    sodium_100g=nutriments.get("sodium_100g"),
+                    salt_100g=nutriments.get("salt_100g"),
+                    serving_size=product_data.get("serving_size"),
+                    serving_quantity=nutriments.get("serving_quantity"),
+                    nutrition_score_fr_100g=nutriments.get("nutrition-score-fr_100g"),
+                    nutrition_score_fr=product_data.get("nutriscore_score"),
+                    general_health_score=product_data.get("nutriscore_score"),
+                    nutri_grade=product_data.get("nutriscore_grade", "").upper()
+                )
             
             # Extract ingredients and allergens
             ingredients_text = product_data.get("ingredients_text", "")

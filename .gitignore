@@ -29,6 +29,10 @@ ENV/
 .env.*
 !.env.example
 
+# Firebase credentials
+credentials/
+!credentials/firebase-credentials.example.json
+
 # IDE
 .idea/
 .vscode/
@@ -63,3 +67,13 @@ htmlcov/
 
 # Debug
 debug.log
+
+# Firebase raw keys
+pickbetter-*.json
+
+# Agentic markdown logs
+*.md
+!README.md
+
+# Deployment scripts
+*.sh

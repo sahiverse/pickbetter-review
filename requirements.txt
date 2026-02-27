@@ -1,28 +1,40 @@
 # Core
-fastapi==0.95.2
-uvicorn==0.22.0
-python-dotenv==1.0.0
+fastapi>=0.95.2
+uvicorn>=0.22.0
+python-dotenv>=1.0.0
+google-generativeai>=0.8.6
+
+# Authentication
+firebase-admin>=6.0.0
+pyjwt>=2.8.0
 
 # Database
-supabase==1.0.3
-sqlmodel==0.0.11
-psycopg2-binary==2.9.9
-alembic==1.10.4
+supabase>=1.0.3
+sqlmodel>=0.0.11
+psycopg2-binary>=2.9.9
+alembic>=1.10.4
+asyncpg>=0.27.0
+sqlalchemy[asyncio]>=2.0.0
+
 
 # HTTP
-httpx==0.23.3
-python-multipart==0.0.6
+httpx>=0.23.3
+python-multipart>=0.0.6
+
+# Pydantic
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
 
 # Development
-pytest==7.3.1
-pytest-asyncio==0.21.0
-pytest-cov==4.0.0
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
 
 # Code Quality
-black==23.3.0
-isort==5.12.0
-mypy==1.2.0
+black>=23.3.0
+isort>=5.12.0
+mypy>=1.2.0
 
 # Type Hints
-typing-extensions==4.5.0
-pydantic==1.10.7
+typing-extensions>=4.5.0
