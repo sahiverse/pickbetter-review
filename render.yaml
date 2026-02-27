@@ -15,9 +15,9 @@ services:
       - key: ENVIRONMENT
         value: "production"
 
+databases:
   # The PostgreSQL Database
-  - type: postgres
-    name: pickbetter-db
+  - name: pickbetter-db
     databaseName: pickbetter
     user: pickbetter_admin
     plan: free
