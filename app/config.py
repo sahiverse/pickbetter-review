@@ -14,10 +14,10 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     API_PREFIX: str = "/api/v1"
     
-    # Supabase
-    SUPABASE_URL: str
-    SUPABASE_KEY: str
-    SUPABASE_SERVICE_KEY: str
+    # Supabase (Optional if DATABASE_URL is provided)
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_KEY: Optional[str] = None
+    SUPABASE_SERVICE_KEY: Optional[str] = None
     
     # Open Food Facts
     OPENFOODFACTS_API_URL: str = "https://world.openfoodfacts.org/api/v2"
