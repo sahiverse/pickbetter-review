@@ -240,7 +240,7 @@ const ContributionScreen: React.FC<ContributionScreenProps> = ({
         formData.append('brand', brand.trim());
       }
 
-      const response = await fetch('/api/v1/contribute/', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/contribute/`, {
         method: 'POST',
         body: formData,
       });

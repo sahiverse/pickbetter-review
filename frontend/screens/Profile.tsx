@@ -129,7 +129,7 @@ const ProfileScreen: React.FC<ProfileProps> = ({ profile, setProfile, onBack, on
     try {
       console.log("Sending to backend:", JSON.stringify(profileData, null, 2));
 
-      const response = await fetch('http://localhost:8000/api/v1/user/profile', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/user/profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -234,8 +234,8 @@ const ProfileScreen: React.FC<ProfileProps> = ({ profile, setProfile, onBack, on
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab
-                ? 'bg-[#93BD57] text-white shadow-md'
-                : 'bg-white text-slate-400 border border-slate-100'
+              ? 'bg-[#93BD57] text-white shadow-md'
+              : 'bg-white text-slate-400 border border-slate-100'
               }`}
           >
             {tab}
@@ -338,8 +338,8 @@ const ProfileScreen: React.FC<ProfileProps> = ({ profile, setProfile, onBack, on
                       key={allergen}
                       onClick={() => toggleTag('allergens', allergen)}
                       className={`p-4 rounded-2xl text-left transition-all ${profile.allergens.includes(allergen)
-                          ? 'bg-[#980404] text-white border-[#980404] shadow-lg scale-[1.02]'
-                          : 'bg-white text-slate-600 border-slate-200'
+                        ? 'bg-[#980404] text-white border-[#980404] shadow-lg scale-[1.02]'
+                        : 'bg-white text-slate-600 border-slate-200'
                         } border-2`}
                     >
                       <span className="font-bold text-sm">{allergen}</span>
@@ -411,8 +411,8 @@ const ProfileScreen: React.FC<ProfileProps> = ({ profile, setProfile, onBack, on
                       key={condition}
                       onClick={() => toggleTag('conditions', condition)}
                       className={`p-4 rounded-2xl text-left transition-all ${profile.conditions.includes(condition)
-                          ? 'bg-[#93BD57] text-white border-[#93BD57] shadow-lg scale-[1.02]'
-                          : 'bg-white text-slate-600 border-slate-200'
+                        ? 'bg-[#93BD57] text-white border-[#93BD57] shadow-lg scale-[1.02]'
+                        : 'bg-white text-slate-600 border-slate-200'
                         } border-2`}
                     >
                       <span className="font-bold text-sm">{condition}</span>
@@ -493,8 +493,8 @@ const ProfileScreen: React.FC<ProfileProps> = ({ profile, setProfile, onBack, on
                         key={type}
                         onClick={() => updateProfile('dietType', type)}
                         className={`py-3 px-4 rounded-2xl text-[10px] font-black uppercase transition-all ${profile.dietType === type
-                            ? 'bg-[#93BD57] text-white shadow-md scale-[1.02]'
-                            : 'bg-white text-slate-400 border border-slate-100'
+                          ? 'bg-[#93BD57] text-white shadow-md scale-[1.02]'
+                          : 'bg-white text-slate-400 border border-slate-100'
                           }`}
                       >
                         {type}
@@ -511,8 +511,8 @@ const ProfileScreen: React.FC<ProfileProps> = ({ profile, setProfile, onBack, on
                         key={goal}
                         onClick={() => updateProfile('primaryGoal', goal)}
                         className={`py-4 px-6 rounded-2xl text-[11px] font-black uppercase text-left transition-all flex justify-between items-center ${profile.primaryGoal === goal
-                            ? 'bg-slate-900 text-white shadow-xl scale-[1.02]'
-                            : 'bg-white text-slate-500 border border-slate-100'
+                          ? 'bg-slate-900 text-white shadow-xl scale-[1.02]'
+                          : 'bg-white text-slate-500 border border-slate-100'
                           }`}
                       >
                         {goal}
