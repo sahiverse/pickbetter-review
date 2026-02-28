@@ -124,4 +124,10 @@ def downgrade() -> None:
                     existing_nullable=True)
     
     op.alter_column('user_profiles', 'allergens',
-                    
+                    existing_type=postgresql.JSONB(astext_type=sa.Text()),
+                    type_=sa.Text(),
+                    existing_nullable=True)
+
+    # Drop soft-delete columns
+    op.drop_column('user_profiles', 'deleted_at')
+    op.drop_column('products', 'deleted_at')
